@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { oauth2Client } = require("../utils/googleConfig");
 const axios = require("axios");
+const { encrypt } = require("../utils/cryptoUtils");
 
 async function googleAuth(req, res) {
   try {
@@ -17,6 +18,8 @@ async function googleAuth(req, res) {
     const { name, email, picture, id } = userRes.data;
     let user = await User.findOne({ email });
 
+    const encryptedRefreshToken = encrypt(googleRes.tokens.refresh_token);
+
     if (!user) {
       user = await User.create({
         name,
@@ -24,6 +27,7 @@ async function googleAuth(req, res) {
         googleId: id,
         profileImage: picture,
         loginType: "google",
+        refreshToken: encryptedRefreshToken,
       });
     }
 
@@ -35,14 +39,11 @@ async function googleAuth(req, res) {
       maxAge: 15 * 60 * 60 * 1000,
     });
 
-    res
-      .status(200)
-      .json({
-        message: "User created successfully",
-        token,
-        user,
-        userRes: userRes.data,
-      });
+    res.status(200).json({
+      message: "User created successfully",
+      user,
+      googleRes: googleRes,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message, error });
   }
