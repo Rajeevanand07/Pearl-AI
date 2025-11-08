@@ -15,11 +15,16 @@ const Login = () => {
     }
   };
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: googleResponse,
-    onError: googleResponse,
-    flow: "auth-code",
-  });
+ const googleLogin = useGoogleLogin({
+  onSuccess: googleResponse,
+  onError: googleResponse,
+  flow: "auth-code",
+  scope: [
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/calendar',
+  ].join(' '),
+});
 
   return <button onClick={() => googleLogin()}>login with google</button>;
 };
