@@ -39,7 +39,6 @@ async function getCalendarEvents(req, res) {
 async function createCalendarEvent(req, res) {
   try {
     const encryptedRefreshToken = req.user.refreshToken;
-    console.log(encryptedRefreshToken);
     const refreshToken = decrypt(encryptedRefreshToken);
 
     const googleRes = await axios.post("https://oauth2.googleapis.com/token", {
@@ -83,7 +82,6 @@ async function createCalendarEvent(req, res) {
       requestBody: event,
     });
 
-    console.log(data);
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({ error: error.message });

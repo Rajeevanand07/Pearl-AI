@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const { oauth2Client } = require("../utils/googleConfig");
 const axios = require("axios");
 const { encrypt } = require("../utils/cryptoUtils");
+const Otp = require("../models/otp.model");
+const { sendOtpEmail } = require("../utils/sendOtp");
 
 async function googleAuth(req, res) {
   try {
@@ -24,10 +26,14 @@ async function googleAuth(req, res) {
       user = await User.create({
         name,
         email,
-        googleId: id,
         profileImage: picture,
         loginType: "google",
-        refreshToken: encryptedRefreshToken,
+        google: {
+          googleId: id,
+          refreshToken: encryptedRefreshToken,
+          isVerified: true,
+          googleConnected: true,
+        },
       });
     }
 
@@ -51,23 +57,68 @@ async function googleAuth(req, res) {
 
 async function register(req, res) {
   try {
-    const { name, email, password } = req.body;
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+    const { name, email, password, otp } = req.body;
+
+    // If OTP is not provided, send OTP
+    if (!otp) {
+      // Check if user already exists
+      const userExists = await User.findOne({ email });
+      if (userExists) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+
+      // Generate and send OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      await Otp.create({ email, otp: otpCode });
+      
+      const isOTPSent = await sendOtpEmail(email, otpCode);
+            
+      if (!isOTPSent) {
+        return res.status(500).json({ message: "Failed to send OTP" });
+      }
+
+      return res.status(200).json({ 
+        message: "OTP sent to email", 
+        tempData: { name, email, password } 
+      });
     }
 
+    // If OTP is provided, verify and register
+    const otpRecord = await Otp.findOne({ email, otp });
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    // Check if OTP is expired (5 minutes)
+    if (new Date() - otpRecord.createdAt > 5 * 60 * 1000) {
+      return res.status(400).json({ message: "OTP has expired" });
+    }
+
+    // Delete the used OTP
+    await Otp.deleteOne({ _id: otpRecord._id });
+
+    // Create user
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
+      profileImage: null,
       loginType: "normal",
+      google: {
+        googleId: null,
+        refreshToken: null,
+        isVerified: true,
+        googleConnected: false,
+      },
     });
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
     res.cookie("token", token);
     return res.status(201).json({ user, token });
+
   } catch (error) {
+    console.error("Registration error:", error);
     res.status(500).json({ error: error.message });
   }
 }
