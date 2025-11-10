@@ -2,10 +2,11 @@ const { oauth2Client } = require("../utils/googleConfig");
 const { google } = require("googleapis");
 const axios = require("axios");
 const { decrypt } = require("../utils/cryptoUtils");
+const { getZoomAccessToken } = require("../utils/zoomAccess");
 
 async function getCalendarEvents(req, res) {
   try {
-    const encryptedRefreshToken = req.user.refreshToken;
+    const encryptedRefreshToken = req.user.google.refreshToken;
     const refreshToken = decrypt(encryptedRefreshToken);
 
     const googleRes = await axios.post("https://oauth2.googleapis.com/token", {
@@ -38,7 +39,7 @@ async function getCalendarEvents(req, res) {
 
 async function createCalendarEvent(req, res) {
   try {
-    const encryptedRefreshToken = req.user.refreshToken;
+    const encryptedRefreshToken = req.user.google.refreshToken;
     const refreshToken = decrypt(encryptedRefreshToken);
 
     const googleRes = await axios.post("https://oauth2.googleapis.com/token", {
@@ -55,34 +56,56 @@ async function createCalendarEvent(req, res) {
       auth: oauth2Client,
     });
 
-    const event = {
-      summary: "Team Sync Meeting",
-      description: "Weekly sync with project team.",
-      start: {
-        dateTime: "2025-11-10T10:00:00+05:30", 
-        timeZone: "Asia/Kolkata",
-      },
-      end: {
-        dateTime: "2025-11-10T11:00:00+05:30",
-        timeZone: "Asia/Kolkata",
-      },
-      attendees: [{ email: "anandrajeev226@gmail.com" }],
-      conferenceData: {
-        createRequest: {
-          requestId: "meet-" + Date.now(),
-          conferenceSolutionKey: { type: "hangoutsMeet" },
+    try {
+      const zoomAccessToken = await getZoomAccessToken();
+      const zoomRes = await axios.post(
+        "https://api.zoom.us/v2/users/me/meetings",
+        {
+          topic: "Team Sync Meeting",
+          type: 2,
+          start_time: "2025-11-11T10:00:00",
+          duration: 60,
+          timezone: "Asia/Kolkata",
         },
-      },
-    };
+        {
+          headers: {
+            Authorization: `Bearer ${zoomAccessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    // Create the event
-    const { data } = await calendar.events.insert({
-      calendarId: "primary",
-      conferenceDataVersion: 1,
-      requestBody: event,
-    });
+      const zoomMeeting = zoomRes.data.join_url;
 
-    return res.status(200).json(data);
+      const event = {
+        summary: "Team Sync Meeting",
+        description: "Weekly sync with project team.",
+        location: zoomMeeting,
+        start: {
+          dateTime: "2025-11-11T10:00:00+05:30",
+          timeZone: "Asia/Kolkata",
+        },
+        end: {
+          dateTime: "2025-11-11T11:00:00+05:30",
+          timeZone: "Asia/Kolkata",
+        },
+        attendees: [{ email: "anandrajeev226@gmail.com" }],
+      };
+
+      // Create the event
+      const { data } = await calendar.events.insert({
+        calendarId: "primary",
+        requestBody: event,
+      });
+
+      return res.status(200).json(data);
+    } catch (error) {
+      console.error(
+        "Error creating Zoom meeting:",
+        error.response?.data || error.message
+      );
+      return res.status(500).json({ error: error.message });
+    }
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

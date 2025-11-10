@@ -72,7 +72,7 @@ async function register(req, res) {
       await Otp.create({ email, otp: otpCode });
       
       const isOTPSent = await sendOtpEmail(email, otpCode);
-            
+
       if (!isOTPSent) {
         return res.status(500).json({ message: "Failed to send OTP" });
       }
