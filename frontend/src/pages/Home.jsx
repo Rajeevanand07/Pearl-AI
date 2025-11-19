@@ -1,9 +1,11 @@
-import React from 'react'
+  import React from 'react'
+  import MeetingContainer from '../components/JitsiMeeting'
 
-const Home = () => {
-  return (
-    <div>Home</div>
-  )
-}
+  const Home = () => {
+    return (
+      <MeetingContainer room="test" />
 
-export default Home
+    )
+  }
+
+  export default Home
